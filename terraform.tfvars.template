@@ -1,0 +1,5 @@
+# terraform.tfvars
+project = "<your-project-id>"
+region  = "us-central1"
+zone    = "us-central1-a"
+subnetwork = "<your-project-id>"

@@ -1,0 +1,11 @@
+.DS_Store
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+*.json
+*.backup

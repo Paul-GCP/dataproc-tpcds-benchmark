@@ -1,5 +1,5 @@
 // Terraform configuration to create a Google Cloud Dataproc cluster
-// with Lightning Engine enabled. Adjust variables as needed before applying.
+// with Lightning Engine enabled, along with a GCS Bucket for staging/assets.
 
 terraform {
   required_providers {
@@ -14,6 +14,10 @@ provider "google" {
   project = var.project
   region  = var.region
 }
+
+# ------------------------------------------------------------------------------
+# 1. define variables
+# ------------------------------------------------------------------------------
 
 variable "project" {
   description = "GCP project id"
@@ -76,21 +80,63 @@ variable "native_runtime" {
   default     = "default"
 }
 
-variable "staging_bucket" {
-  description = "GCS bucket for Dataproc staging. If empty, Dataproc will auto-create one."
+variable "bucket_name" {
+  description = "Name of the GCS bucket to create. Leave empty to auto-generate based on project ID."
   type        = string
   default     = ""
 }
+
+# ------------------------------------------------------------------------------
+# 2. Create a GCS bucket for Dataproc staging/assets
+# ------------------------------------------------------------------------------
+
+resource "google_storage_bucket" "assets_bucket" {
+  name                        = var.bucket_name != "" ? var.bucket_name : "${var.project}-dataproc-assets"
+  location                    = var.region
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
+
+# ------------------------------------------------------------------------------
+# 3. Upload local lib/ files to the GCS bucket
+# ------------------------------------------------------------------------------
+
+resource "google_storage_bucket_object" "lib_files" {
+  for_each = fileset("${path.module}/lib", "**")
+
+  name   = "lib/${each.value}"
+  bucket = google_storage_bucket.assets_bucket.name
+  source = "${path.module}/lib/${each.value}"
+
+  detect_md5hash = filemd5("${path.module}/lib/${each.value}")
+}
+
+# ------------------------------------------------------------------------------
+# 4. Create a Dataproc cluster with Lightning Engine enabled
+# ------------------------------------------------------------------------------
 
 resource "google_dataproc_cluster" "cluster" {
   name   = var.cluster_name
   region = var.region
 
+  depends_on = [
+    google_storage_bucket_object.lib_files
+  ]
+
   cluster_config {
-    staging_bucket = var.staging_bucket != "" ? var.staging_bucket : null
+    staging_bucket = google_storage_bucket.assets_bucket.name
 
     // Enable Lightning Engine at cluster creation
     engine = "LIGHTNING"
+    // Enable HTTP port access for the cluster
+    endpoint_config {
+      enable_http_port_access = true
+    }
+
+    initialization_action {
+      script      = "gs://${google_storage_bucket.assets_bucket.name}/scripts/setup-tools.sh"
+      timeout_sec = 300
+    }
 
     gce_cluster_config {
       zone = var.zone != "" ? var.zone : null
@@ -120,6 +166,15 @@ resource "google_dataproc_cluster" "cluster" {
   }
 }
 
+# ------------------------------------------------------------------------------
+# 5. Outputs
+# ------------------------------------------------------------------------------
+
 output "cluster_name" {
   value = google_dataproc_cluster.cluster.name
+}
+
+output "bucket_name" {
+  value       = google_storage_bucket.assets_bucket.name
+  description = "The name of the created GCS bucket"
 }

@@ -111,6 +111,14 @@ resource "google_storage_bucket_object" "lib_files" {
   detect_md5hash = filemd5("${path.module}/lib/${each.value}")
 }
 
+resource "google_storage_bucket_object" "setup_script" {
+  name   = "scripts/setup-tools.sh"
+  bucket = google_storage_bucket.assets_bucket.name
+  source = "${path.module}/scripts/setup-tools.sh"
+
+  detect_md5hash = filemd5("${path.module}/scripts/setup-tools.sh")
+}
+
 # ------------------------------------------------------------------------------
 # 4. Create a Dataproc cluster with Lightning Engine enabled
 # ------------------------------------------------------------------------------
@@ -134,7 +142,7 @@ resource "google_dataproc_cluster" "cluster" {
     }
 
     initialization_action {
-      script      = "gs://${google_storage_bucket.assets_bucket.name}/scripts/setup-tools.sh"
+      script      = "gs://${google_storage_bucket.assets_bucket.name}/${google_storage_bucket_object.setup_script.output_name}"
       timeout_sec = 300
     }
 

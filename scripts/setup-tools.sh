@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-mkdir -p /root/tools
+mkdir -p /opt/tools
 
-gcloud storage cp gs://dataproc-tpcds-bench/lib/tools/* /opt/tools/
+gcloud storage cp gs://${google_storage_bucket}/lib/tools/* /opt/tools/
 
 chmod -R 755 /opt/tools

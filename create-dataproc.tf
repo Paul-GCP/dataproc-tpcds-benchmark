@@ -91,14 +91,14 @@ variable "bucket_name" {
 # ------------------------------------------------------------------------------
 
 resource "google_storage_bucket" "assets_bucket" {
-  name                        = var.bucket_name != "" ? var.bucket_name : "${var.project}-dataproc-assets"
+  name                        = var.bucket_name != "" ? var.bucket_name : "${var.project}-dataproc-benchmark-assets"
   location                    = var.region
   force_destroy               = true
   uniform_bucket_level_access = true
 }
 
 # ------------------------------------------------------------------------------
-# 3. Upload local lib/ files to the GCS bucket
+# 3. Upload local lib/ files to the GCS bucket and create a setup script for Dataproc initialization
 # ------------------------------------------------------------------------------
 
 resource "google_storage_bucket_object" "lib_files" {
@@ -114,9 +114,37 @@ resource "google_storage_bucket_object" "lib_files" {
 resource "google_storage_bucket_object" "setup_script" {
   name   = "scripts/setup-tools.sh"
   bucket = google_storage_bucket.assets_bucket.name
-  source = "${path.module}/scripts/setup-tools.sh"
+  content = templatefile("${path.module}/scripts/setup-tools.sh", {
+    google_storage_bucket = google_storage_bucket.assets_bucket.name
+  })
 
-  detect_md5hash = filemd5("${path.module}/scripts/setup-tools.sh")
+  detect_md5hash = md5(templatefile("${path.module}/scripts/setup-tools.sh", {
+    google_storage_bucket = google_storage_bucket.assets_bucket.name
+  }))
+}
+
+resource "local_file" "spark_job_datagen" {
+  filename = "${path.module}/spark_jobs/datagen.sh"
+  
+  content = templatefile("${path.module}/spark_jobs/templates/datagen.sh.tpl", {
+    google_storage_bucket = google_storage_bucket.assets_bucket.name
+  })
+}
+
+resource "local_file" "spark_job_lighting" {
+  filename = "${path.module}/spark_jobs/benchmark-lighting-engine.sh"
+  
+  content = templatefile("${path.module}/spark_jobs/templates/benchmark-lighting-engine.sh.tpl", {
+    google_storage_bucket = google_storage_bucket.assets_bucket.name
+  })
+}
+
+resource "local_file" "spark_job_default" {
+  filename = "${path.module}/spark_jobs/benchmark-default-runtime.sh"
+  
+  content = templatefile("${path.module}/spark_jobs/templates/benchmark-default-runtime.sh.tpl", {
+    google_storage_bucket = google_storage_bucket.assets_bucket.name
+  })
 }
 
 # ------------------------------------------------------------------------------
